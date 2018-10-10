@@ -29,6 +29,8 @@
 #import "UIImageView+WebCache.h"
 #endif
 
+#import "HXAlbumlistView.h"
+
 @interface HXDatePhotoViewController ()
 <
 UICollectionViewDataSource,
@@ -59,6 +61,7 @@ HXDatePhotoEditViewControllerDelegate
 @property (strong, nonatomic) NSIndexPath *beforeOrientationIndexPath;
 
 @property (weak, nonatomic) HXDatePhotoViewSectionFooterView *footerView;
+@property (assign, nonatomic) BOOL showBottomPhotoCount;
 @end
 
 @implementation HXDatePhotoViewController
@@ -94,10 +97,10 @@ HXDatePhotoEditViewControllerDelegate
 }
 - (void)changeSubviewFrame {
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
-    CGFloat navBarHeight = kNavigationBarHeight;
+    CGFloat navBarHeight = hxNavigationBarHeight;
     NSInteger lineCount = self.manager.configuration.rowCount;
     if (orientation == UIInterfaceOrientationPortrait || UIInterfaceOrientationPortrait == UIInterfaceOrientationPortraitUpsideDown) {
-        navBarHeight = kNavigationBarHeight;
+        navBarHeight = hxNavigationBarHeight;
         lineCount = self.manager.configuration.rowCount;
         [[UIApplication sharedApplication] setStatusBarHidden:NO withAnimation:UIStatusBarAnimationFade];
     }else if (orientation == UIInterfaceOrientationLandscapeRight || orientation == UIInterfaceOrientationLandscapeLeft){
@@ -109,7 +112,7 @@ HXDatePhotoEditViewControllerDelegate
         }
         lineCount = self.manager.configuration.horizontalRowCount;
     }
-    CGFloat bottomMargin = kBottomMargin;
+    CGFloat bottomMargin = hxBottomMargin;
     CGFloat leftMargin = 0;
     CGFloat rightMargin = 0;
     CGFloat width = [UIScreen mainScreen].bounds.size.width;
@@ -119,7 +122,7 @@ HXDatePhotoEditViewControllerDelegate
     if (!CGRectEqualToRect(self.view.bounds, [UIScreen mainScreen].bounds)) {
         self.view.frame = CGRectMake(0, 0, viewWidth, height);
     }
-    if (kDevice_Is_iPhoneX && (orientation == UIInterfaceOrientationLandscapeLeft || orientation == UIInterfaceOrientationLandscapeRight)) {
+    if (HX_IS_IPhoneX_All && (orientation == UIInterfaceOrientationLandscapeLeft || orientation == UIInterfaceOrientationLandscapeRight)) {
         bottomMargin = 21;
         leftMargin = 35;
         rightMargin = 35;
@@ -227,9 +230,9 @@ HXDatePhotoEditViewControllerDelegate
 }
 - (void)scrollToPoint:(HXDatePhotoViewCell *)cell rect:(CGRect)rect {
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
-    CGFloat navBarHeight = kNavigationBarHeight;
+    CGFloat navBarHeight = hxNavigationBarHeight;
     if (orientation == UIInterfaceOrientationPortrait || UIInterfaceOrientationPortrait == UIInterfaceOrientationPortraitUpsideDown) {
-        navBarHeight = kNavigationBarHeight;
+        navBarHeight = hxNavigationBarHeight;
     }else if (orientation == UIInterfaceOrientationLandscapeRight || orientation == UIInterfaceOrientationLandscapeLeft){
         if ([UIApplication sharedApplication].statusBarHidden) {
             navBarHeight = self.navigationController.navigationBar.hx_h;
@@ -242,11 +245,15 @@ HXDatePhotoEditViewControllerDelegate
     }
     if (rect.origin.y < navBarHeight) {
         [self.collectionView setContentOffset:CGPointMake(0, cell.frame.origin.y - navBarHeight)];
-    }else if (rect.origin.y + rect.size.height > self.view.hx_h - 50.5 - kBottomMargin) {
-        [self.collectionView setContentOffset:CGPointMake(0, cell.frame.origin.y - self.view.hx_h + 50.5 + kBottomMargin + rect.size.height)];
+    }else if (rect.origin.y + rect.size.height > self.view.hx_h - 50.5 - hxBottomMargin) {
+        [self.collectionView setContentOffset:CGPointMake(0, cell.frame.origin.y - self.view.hx_h + 50.5 + hxBottomMargin + rect.size.height)];
     }
 }
 - (void)getPhotoList {
+    if (self.manager.configuration.showBottomPhotoDetail) {
+        self.showBottomPhotoCount = YES;
+        self.manager.configuration.showBottomPhotoDetail = NO;
+    }
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak typeof(self) weakSelf = self;
         [self.manager getPhotoListWithAlbumModel:self.albumModel complete:^(NSArray *allList, NSArray *previewList, NSArray *photoList, NSArray *videoList, NSArray *dateList, HXPhotoModel *firstSelectModel) {
@@ -254,6 +261,9 @@ HXDatePhotoEditViewControllerDelegate
             weakSelf.photoArray = [NSMutableArray arrayWithArray:photoList];
             weakSelf.videoArray = [NSMutableArray arrayWithArray:videoList];
             weakSelf.allArray = [NSMutableArray arrayWithArray:allList];
+            if (weakSelf.allArray.count && weakSelf.showBottomPhotoCount) {
+                weakSelf.manager.configuration.showBottomPhotoDetail = YES;
+            }
             weakSelf.previewArray = [NSMutableArray arrayWithArray:previewList];
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf.view handleLoading];
@@ -353,7 +363,12 @@ HXDatePhotoEditViewControllerDelegate
             NSMutableArray *array = [NSMutableArray arrayWithArray:dateModel.photoModelArray];
             [array insertObject:model atIndex:cameraIndex];
             dateModel.photoModelArray = array;
-            [self.collectionView insertItemsAtIndexPaths:@[[NSIndexPath indexPathForItem:cameraIndex inSection:0]]];
+            if (!dateModel.location && model.location) {
+                dateModel.location = model.location;
+                [self.collectionView reloadSections:[NSIndexSet indexSetWithIndex:0]];
+            }else {
+                [self.collectionView insertItemsAtIndexPaths:@[[NSIndexPath indexPathForItem:cameraIndex inSection:0]]];
+            }
         }else {
             model.dateSection = self.dateArray.count - 1;
             HXPhotoDateModel *dateModel = self.dateArray.lastObject;
@@ -361,7 +376,12 @@ HXDatePhotoEditViewControllerDelegate
             NSInteger count = array.count - cameraIndex;
             [array insertObject:model atIndex:count];
             dateModel.photoModelArray = array;
-            [self.collectionView insertItemsAtIndexPaths:@[[NSIndexPath indexPathForItem:count inSection:self.dateArray.count - 1]]];
+            if (!dateModel.location && model.location) {
+                dateModel.location = model.location;
+                [self.collectionView reloadSections:[NSIndexSet indexSetWithIndex:self.dateArray.count - 1]];
+            }else {
+                [self.collectionView insertItemsAtIndexPaths:@[[NSIndexPath indexPathForItem:count inSection:self.dateArray.count - 1]]];
+            }
         }
     }else {
         if (self.manager.configuration.reverseDate) {
@@ -518,8 +538,8 @@ HXDatePhotoEditViewControllerDelegate
             return;
         }
         if (!self.manager.configuration.singleSelected) {
-            NSInteger currentIndex = [self.previewArray indexOfObject:cell.model];
             HXDatePhotoPreviewViewController *previewVC = [[HXDatePhotoPreviewViewController alloc] init];
+            NSInteger currentIndex = [self.previewArray indexOfObject:cell.model];
             previewVC.delegate = self;
             previewVC.modelArray = self.previewArray;
             previewVC.manager = self.manager;
@@ -543,6 +563,7 @@ HXDatePhotoEditViewControllerDelegate
                     vc.delegate = self;
                     vc.manager = self.manager;
                     [self.navigationController pushViewController:vc animated:NO];
+                    return;
                 }else {
                     HXDatePhotoPreviewViewController *previewVC = [[HXDatePhotoPreviewViewController alloc] init];
                     previewVC.delegate = self;
@@ -650,7 +671,11 @@ HXDatePhotoEditViewControllerDelegate
         previewVC.delegate = self;
         previewVC.modelArray = self.previewArray;
         previewVC.manager = self.manager;
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+        cell.model.tempImage = vc.animatedImageView.image;
+#else
         cell.model.tempImage = vc.imageView.image;
+#endif
         NSInteger currentIndex = [self.previewArray indexOfObject:cell.model];
         previewVC.currentModelIndex = currentIndex;
         self.navigationController.delegate = previewVC;
@@ -667,7 +692,11 @@ HXDatePhotoEditViewControllerDelegate
             previewVC.delegate = self;
             previewVC.modelArray = [NSMutableArray arrayWithObjects:cell.model, nil];
             previewVC.manager = self.manager;
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+            cell.model.tempImage = vc.animatedImageView.image;
+#else
             cell.model.tempImage = vc.imageView.image;
+#endif
             previewVC.currentModelIndex = 0;
             self.navigationController.delegate = previewVC;
             [self.navigationController pushViewController:previewVC animated:YES];
@@ -889,7 +918,7 @@ HXDatePhotoEditViewControllerDelegate
 #pragma mark - < 懒加载 >
 - (HXDatePhotoBottomView *)bottomView {
     if (!_bottomView) {
-        _bottomView = [[HXDatePhotoBottomView alloc] initWithFrame:CGRectMake(0, self.view.hx_h - 50 - kBottomMargin, self.view.hx_w, 50 + kBottomMargin)];
+        _bottomView = [[HXDatePhotoBottomView alloc] initWithFrame:CGRectMake(0, self.view.hx_h - 50 - hxBottomMargin, self.view.hx_w, 50 + hxBottomMargin)];
         _bottomView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         _bottomView.manager = self.manager;
         _bottomView.delegate = self;
@@ -996,8 +1025,10 @@ HXDatePhotoEditViewControllerDelegate
     return _dateArray;
 }
 - (void)dealloc {
-    if (showLog) NSSLog(@"dealloc");
-    [self.collectionView.layer removeAllAnimations];
+    if (HXShowLog) NSSLog(@"dealloc");
+    if (_collectionView) {
+        [self.collectionView.layer removeAllAnimations];
+    }
     if (self.manager.configuration.open3DTouchPreview) {
         if (self.previewingContext) {
             [self unregisterForPreviewingWithContext:self.previewingContext];
@@ -1072,7 +1103,7 @@ HXDatePhotoEditViewControllerDelegate
 }
 - (void)dealloc {
     [self stopRunning];
-    if (showLog) NSSLog(@"camera - dealloc");
+    if (HXShowLog) NSSLog(@"camera - dealloc");
 }
 - (UIButton *)cameraBtn {
     if (!_cameraBtn) {
@@ -1111,6 +1142,7 @@ HXDatePhotoEditViewControllerDelegate
 @property (strong, nonatomic) HXDownloadProgressView *downloadView;
 @property (strong, nonatomic) HXCircleProgressView *progressView;
 @property (strong, nonatomic) CALayer *videoMaskLayer;
+@property (strong, nonatomic) UIView *highlightMaskView;
 @end
 
 @implementation HXDatePhotoViewCell
@@ -1127,6 +1159,7 @@ HXDatePhotoEditViewControllerDelegate
     [self.contentView addSubview:self.maskView];
     [self.contentView addSubview:self.downloadView];
     [self.contentView addSubview:self.progressView];
+    [self.contentView addSubview:self.highlightMaskView];
 }
 - (void)bottomViewPrepareAnimation {
     self.maskView.alpha = 0;
@@ -1173,10 +1206,24 @@ HXDatePhotoEditViewControllerDelegate
             self.imageView.image = model.thumbPhoto;
         }
     }else {
+        if (!self.imageView.image) {
+            self.imageView.hidden = YES;
+            self.imageView.alpha = 0;
+            self.maskView.hidden = YES;
+            self.maskView.alpha = 0;
+        }
         self.imageView.image = nil;
         PHImageRequestID requestID = [HXPhotoTools getImageWithModel:model completion:^(UIImage *image, HXPhotoModel *model) {
             if (weakSelf.model == model) {
                 weakSelf.imageView.image = image;
+                if (weakSelf.maskView.hidden) {
+                    weakSelf.imageView.hidden = NO;
+                    weakSelf.maskView.hidden = NO;
+                    [UIView animateWithDuration:0.2 animations:^{
+                        weakSelf.maskView.alpha = 1;
+                        weakSelf.imageView.alpha = 1;
+                    }];
+                }
             }
         }];
         self.requestID = requestID;
@@ -1195,8 +1242,19 @@ HXDatePhotoEditViewControllerDelegate
             self.stateLb.hidden = NO;
             self.bottomMaskLayer.hidden = NO;
         }else {
-            self.stateLb.hidden = YES;
-            self.bottomMaskLayer.hidden = YES;
+            if (model.networkPhotoUrl) {
+                if ([[model.networkPhotoUrl.absoluteString substringFromIndex:model.networkPhotoUrl.absoluteString.length - 3] isEqualToString:@"gif"]) {
+                    self.stateLb.text = @"GIF";
+                    self.stateLb.hidden = NO;
+                    self.bottomMaskLayer.hidden = NO;
+                }else {
+                    self.stateLb.hidden = YES;
+                    self.bottomMaskLayer.hidden = YES;
+                }
+            }else {
+                self.stateLb.hidden = YES;
+                self.bottomMaskLayer.hidden = YES;
+            }
         }
     }
     self.selectMaskLayer.hidden = !model.selected;
@@ -1350,7 +1408,9 @@ HXDatePhotoEditViewControllerDelegate
     self.iCloudMaskLayer.hidden = !self.model.isICloud;
 }
 - (void)cancelRequest {
-#if __has_include(<SDWebImage/UIImageView+WebCache.h>) || __has_include("UIImageView+WebCache.h")
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+    [self.imageView yy_cancelCurrentImageRequest];
+#elif __has_include(<SDWebImage/UIImageView+WebCache.h>) || __has_include("UIImageView+WebCache.h")
     [self.imageView sd_cancelCurrentAnimationImagesLoad];
 #endif
     if (self.requestID) {
@@ -1373,6 +1433,10 @@ HXDatePhotoEditViewControllerDelegate
         [self.delegate datePhotoViewCell:self didSelectBtn:button];
     }
 }
+- (void)setHighlighted:(BOOL)highlighted {
+    [super setHighlighted:highlighted];
+    self.highlightMaskView.hidden = !highlighted;
+}
 - (void)layoutSubviews {
     [super layoutSubviews];
     self.imageView.frame = self.bounds;
@@ -1387,11 +1451,20 @@ HXDatePhotoEditViewControllerDelegate
     self.downloadView.frame = self.bounds;
     self.progressView.center = CGPointMake(self.hx_w / 2, self.hx_h / 2);
     self.videoMaskLayer.frame = self.bounds;
+    self.highlightMaskView.frame = self.bounds;
 }
 - (void)dealloc {
     self.model.dateCellIsVisible = NO;
 }
 #pragma mark - < 懒加载 >
+- (UIView *)highlightMaskView {
+    if (!_highlightMaskView) {
+        _highlightMaskView = [[UIView alloc] initWithFrame:self.bounds];
+        _highlightMaskView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5f];
+        _highlightMaskView.hidden = YES;
+    }
+    return _highlightMaskView;
+}
 - (HXDownloadProgressView *)downloadView {
     if (!_downloadView) {
         _downloadView = [[HXDownloadProgressView alloc] initWithFrame:self.bounds];
@@ -1410,6 +1483,7 @@ HXDatePhotoEditViewControllerDelegate
         _imageView = [[UIImageView alloc] init];
         _imageView.contentMode = UIViewContentModeScaleAspectFill;
         _imageView.clipsToBounds = YES;
+        _imageView.backgroundColor = [UIColor colorWithRed:0.95 green:0.95 blue:0.95 alpha:1];
     }
     return _imageView;
 }
@@ -1428,7 +1502,7 @@ HXDatePhotoEditViewControllerDelegate
 }
 - (UIImageView *)iCloudIcon {
     if (!_iCloudIcon) {
-        _iCloudIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"icon_yunxiazai@2x.png"]];
+        _iCloudIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"hx_yunxiazai@2x.png"]];
         _iCloudIcon.hx_size = _iCloudIcon.image.size;
     }
     return _iCloudIcon;
@@ -1481,7 +1555,7 @@ HXDatePhotoEditViewControllerDelegate
 - (UIButton *)selectBtn {
     if (!_selectBtn) {
         _selectBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-        [_selectBtn setBackgroundImage:[HXPhotoTools hx_imageNamed:@"compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
+        [_selectBtn setBackgroundImage:[HXPhotoTools hx_imageNamed:@"hx_compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
         [_selectBtn setBackgroundImage:[[UIImage alloc] init] forState:UIControlStateSelected];
         [_selectBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
         _selectBtn.titleLabel.font = [UIFont systemFontOfSize:14];

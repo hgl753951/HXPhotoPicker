@@ -69,17 +69,17 @@
     CGFloat imgWidht = model.endDateImageSize.width;
     CGFloat imgHeight = model.endDateImageSize.height;
     CGFloat width = [UIScreen mainScreen].bounds.size.width;
-    CGFloat height = [UIScreen mainScreen].bounds.size.height - kTopMargin - kBottomMargin;
+    CGFloat height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - hxBottomMargin;
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
     if (orientation == UIInterfaceOrientationLandscapeRight || orientation == UIInterfaceOrientationLandscapeLeft){
-        if (kDevice_Is_iPhoneX) {
-            height = [UIScreen mainScreen].bounds.size.height - kTopMargin - 21;
+        if (HX_IS_IPhoneX_All) {
+            height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - 21;
         }
     }
     toVC.navigationController.navigationBar.userInteractionEnabled = NO;
     
     [UIView animateWithDuration:[self transitionDuration:transitionContext] delay:0 usingSpringWithDamping:0.75f initialSpringVelocity:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
-        tempView.frame = CGRectMake((width - imgWidht) / 2, (height - imgHeight) / 2 + kTopMargin, imgWidht, imgHeight);
+        tempView.frame = CGRectMake((width - imgWidht) / 2, (height - imgHeight) / 2 + hxTopMargin, imgWidht, imgHeight);
     } completion:^(BOOL finished) {
         toVC.collectionView.hidden = NO;
         [tempBgView removeFromSuperview];
@@ -131,13 +131,13 @@
     UIViewController *toVC = [transitionContext viewControllerForKey:UITransitionContextToViewControllerKey];
     if (!fromVC.modelArray.count) {
         UIView *containerView = [transitionContext containerView];
-        UIView *tempView = [fromVC.view snapshotViewAfterScreenUpdates:NO];
-        [containerView addSubview:tempView];
+//        UIView *tempView = [fromVC.view snapshotViewAfterScreenUpdates:NO];
+        [containerView addSubview:fromVC.view];
         [UIView animateWithDuration:[self transitionDuration:transitionContext] animations:^{
-            tempView.alpha = 0;
-            tempView.transform = CGAffineTransformMakeScale(1.5, 1.5);
+            fromVC.view.alpha = 0;
+            fromVC.view.transform = CGAffineTransformMakeScale(1.5, 1.5);
         } completion:^(BOOL finished) {
-            [tempView removeFromSuperview];
+//            [tempView removeFromSuperview];
             [transitionContext completeTransition:YES];
         }];
         return;
@@ -148,7 +148,11 @@
     if (model.type == HXPhotoModelMediaTypeCameraPhoto) {
         tempView = [[UIImageView alloc] initWithImage:model.thumbPhoto];
     }else {
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+        tempView = [[UIImageView alloc] initWithImage:fromCell.animatedImageView.image];
+#else
         tempView = [[UIImageView alloc] initWithImage:fromCell.imageView.image];
+#endif
     }
     UICollectionView *collectionView = (UICollectionView *)self.photoView.collectionView;
     
@@ -174,7 +178,11 @@
     
     
     UIView *containerView = [transitionContext containerView];
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h") 
+    tempView.frame = [fromCell.animatedImageView convertRect:fromCell.animatedImageView.bounds toView:containerView];
+#else
     tempView.frame = [fromCell.imageView convertRect:fromCell.imageView.bounds toView:containerView];
+#endif
     [containerView addSubview:tempView];
     if (model.type == HXPhotoModelMediaTypeCameraPhoto) {
         CGPoint center = tempView.center;

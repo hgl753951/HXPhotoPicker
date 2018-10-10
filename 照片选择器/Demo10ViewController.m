@@ -21,14 +21,14 @@ static const CGFloat kPhotoViewMargin = 12.0;
     // Do any additional setup after loading the view.
     self.view.backgroundColor = [UIColor whiteColor];
     HXPhotoView *photoView = [HXPhotoView photoManager:self.manager];
-    photoView.frame = CGRectMake(kPhotoViewMargin, kNavigationBarHeight + kPhotoViewMargin, self.view.hx_w - kPhotoViewMargin * 2, 0);
+    photoView.frame = CGRectMake(kPhotoViewMargin, hxNavigationBarHeight + kPhotoViewMargin, self.view.hx_w - kPhotoViewMargin * 2, 0);
     photoView.showAddCell = YES;
     [photoView.collectionView reloadData];
     photoView.backgroundColor = [UIColor whiteColor];
     [self.view addSubview:photoView];
     self.photoView = photoView;
     HXWeakSelf
-    [HXPhotoTools getSelectedModelArrayWithManager:self.manager complete:^(NSArray<HXPhotoModel *> *modelArray) {
+    [self.manager getSelectedModelArrayComplete:^(NSArray<HXPhotoModel *> *modelArray) {
         [weakSelf.manager addModelArray:modelArray];
         [weakSelf.photoView refreshView];
     }];
@@ -45,7 +45,7 @@ static const CGFloat kPhotoViewMargin = 12.0;
     }
     [self.view showLoadingHUDText:nil];
     HXWeakSelf
-    [HXPhotoTools saveSelectModelArrayWithManager:self.manager success:^{
+    [self.manager saveSelectModelArraySuccess:^{
         [weakSelf.view handleLoading];
     } failed:^{
         [weakSelf.view handleLoading];
@@ -53,7 +53,7 @@ static const CGFloat kPhotoViewMargin = 12.0;
     }];
 }
 - (void)didNavBtnClick {
-    BOOL success = [HXPhotoTools deleteLocalSelectModelArrayWithManager:self.manager];
+    BOOL success = [self.manager deleteLocalSelectModelArray];
     if (!success) {
         
     }

@@ -61,11 +61,11 @@
     CGFloat imgWidht = model.endDateImageSize.width;
     CGFloat imgHeight = model.endDateImageSize.height;
     CGFloat width = [UIScreen mainScreen].bounds.size.width;
-    CGFloat height = [UIScreen mainScreen].bounds.size.height - kTopMargin - kBottomMargin;
+    CGFloat height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - hxBottomMargin;
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
     if (orientation == UIInterfaceOrientationLandscapeRight || orientation == UIInterfaceOrientationLandscapeLeft){
-        if (kDevice_Is_iPhoneX) {
-            height = [UIScreen mainScreen].bounds.size.height - kTopMargin - 21;
+        if (HX_IS_IPhoneX_All) {
+            height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - 21;
         }
     }
     UIImageView *tempView = [[UIImageView alloc] initWithImage:image];
@@ -91,7 +91,7 @@
     UIViewAnimationOptions option = fromVC.manager.configuration.transitionAnimationOption;
     
     [UIView animateWithDuration:[self transitionDuration:transitionContext] delay:0 usingSpringWithDamping:0.8f initialSpringVelocity:0 options:option animations:^{
-        tempView.frame = CGRectMake((width - imgWidht) / 2, (height - imgHeight) / 2 + kTopMargin, imgWidht, imgHeight);
+        tempView.frame = CGRectMake((width - imgWidht) / 2, (height - imgHeight) / 2 + hxTopMargin, imgWidht, imgHeight);
         tempBgView.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:1];
         toVC.bottomView.alpha = 1;
     } completion:^(BOOL finished) {
@@ -112,7 +112,12 @@
     
     HXDatePhotoPreviewViewCell *fromCell = [fromVC currentPreviewCell:model];
     HXDatePhotoViewCell *toCell = [toVC currentPreviewCell:model];
-    UIImageView *tempView = [[UIImageView alloc] initWithImage:fromCell.imageView.image];
+    UIImageView *tempView;
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+    tempView = [[UIImageView alloc] initWithImage:fromCell.animatedImageView.image];
+#else
+    tempView = [[UIImageView alloc] initWithImage:fromCell.imageView.image];
+#endif
     tempView.clipsToBounds = YES;
     tempView.contentMode = UIViewContentModeScaleAspectFill;
     BOOL contains = YES;
@@ -140,7 +145,11 @@
     toCell.hidden = YES;
     fromVC.view.backgroundColor = [UIColor clearColor];
     
+#if __has_include(<YYWebImage/YYWebImage.h>) || __has_include("YYWebImage.h")
+    tempView.frame = [fromCell.animatedImageView convertRect:fromCell.animatedImageView.bounds toView:containerView];
+#else
     tempView.frame = [fromCell.imageView convertRect:fromCell.imageView.bounds toView:containerView];
+#endif
     
     CGRect rect = [toCell.imageView convertRect:toCell.imageView.bounds toView: containerView];
     if (toCell) {

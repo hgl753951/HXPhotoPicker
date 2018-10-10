@@ -34,125 +34,6 @@
     }
 }
 
-+ (void)saveSelectModelArrayWithManager:(HXPhotoManager *)manager success:(void (^)(void))success failed:(void (^)(void))failed {
-    if (!manager.afterSelectedArray.count) if (failed) {
-        failed();
-        return;
-    }
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSMutableArray *gifModel = [NSMutableArray array];
-        for (HXPhotoModel *model in manager.afterSelectedArray) {
-            if (model.type == HXPhotoModelMediaTypePhotoGif && !model.gifImageData) {
-                [gifModel addObject:model];
-            }
-        }
-        if (gifModel.count) {
-            HXWeakSelf
-            [[[HXDatePhotoToolManager alloc] init] gifModelAssignmentData:gifModel success:^{
-                BOOL su = [weakSelf saveSelectModelArray:manager.afterSelectedArray fileName:manager.configuration.localFileName];
-                if (!su) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        if (failed) {
-                            failed();
-                        }
-                        if (showLog) NSSLog(@"保存草稿失败啦!");
-                    });
-                }else {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        if (success) {
-                            success();
-                        }
-                    });
-                }
-            } failed:^{
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (failed) {
-                        failed();
-                    }
-                    if (showLog) NSSLog(@"保存草稿失败啦!");
-                });
-            }];
-        }else {
-            BOOL su = [self saveSelectModelArray:manager.afterSelectedArray fileName:manager.configuration.localFileName];
-            if (!su) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (failed) {
-                        failed();
-                    }
-                    if (showLog) NSSLog(@"保存草稿失败啦!");
-                });
-            }else {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (success) {
-                        success();
-                    }
-                });
-            }
-        }
-    });
-}
-
-+ (BOOL)deleteLocalSelectModelArrayWithManager:(HXPhotoManager *)manager{
-    return [self deleteSelectModelArrayWithFileName:manager.configuration.localFileName];
-}
-
-+ (void)getSelectedModelArrayWithManager:(HXPhotoManager *)manager complete:(void (^)(NSArray<HXPhotoModel *> *modelArray))complete  {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSArray *modelArray = [self getSelectedModelArrayWithFileName:manager.configuration.localFileName];
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (complete) {
-                complete(modelArray);
-            }
-        });
-    });
-}
-
-+ (BOOL)saveSelectModelArray:(NSArray<HXPhotoModel *> *)modelArray fileName:(NSString *)fileName {
-    NSMutableData *data = [[NSMutableData alloc] init];
-    //创建归档辅助类
-    NSKeyedArchiver *archiver = [[NSKeyedArchiver alloc] initForWritingWithMutableData:data];
-    //编码
-    [archiver encodeObject:modelArray forKey:encodeKey];
-    //结束编码
-    [archiver finishEncoding];
-    //写入到沙盒
-    NSArray *array =  NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *toFileName = [array.firstObject stringByAppendingPathComponent:fileName];
-    
-    if([data writeToFile:toFileName atomically:YES]){
-        if (showLog) NSSLog(@"归档成功");
-        return YES;
-    }
-    return NO;
-}
-
-+ (NSArray<HXPhotoModel *> *)getSelectedModelArrayWithFileName:(NSString *)fileName {
-    NSArray *array =  NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *toFileName = [array.firstObject stringByAppendingPathComponent:fileName];
-    //解档
-    NSData *undata = [[NSData alloc] initWithContentsOfFile:toFileName];
-    //解档辅助类
-    NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:undata];
-    //解码并解档出model
-    NSArray *tempArray = [unarchiver decodeObjectForKey:encodeKey];
-    //关闭解档
-    [unarchiver finishDecoding];
-    return tempArray.copy;
-}
-
-+ (BOOL)deleteSelectModelArrayWithFileName:(NSString *)fileName {
-    NSArray *array =  NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *toFileName = [array.firstObject stringByAppendingPathComponent:fileName];
-    NSError *error;
-    [[NSFileManager defaultManager] removeItemAtPath:toFileName error:&error];
-    if (error) {
-        if (showLog) NSSLog(@"删除失败");
-        return NO;
-    }
-    return YES;
-}
-
 + (CLGeocoder *)getDateLocationDetailInformationWithModel:(HXPhotoDateModel *)model completion:(void (^)(CLPlacemark *placemark,HXPhotoDateModel *model))completion {
     CLGeocoder *geoCoder = [[CLGeocoder alloc] init];
     [geoCoder reverseGeocodeLocation:model.location completionHandler:^(NSArray<CLPlacemark *> * _Nullable placemarks, NSError * _Nullable error) {
@@ -400,6 +281,65 @@
     }];
     model.iCloudRequestID = requestID;
     return requestID;
+}
+
++ (PHContentEditingInputRequestID)getImagePathWithModel:(HXPhotoModel *)model startRequestIcloud:(void (^)(HXPhotoModel *, PHContentEditingInputRequestID))startRequestIcloud progressHandler:(void (^)(HXPhotoModel *, double))progressHandler completion:(void (^)(HXPhotoModel *, NSString *))completion failed:(void (^)(HXPhotoModel *, NSDictionary *))failed {
+    
+    PHContentEditingInputRequestOptions *options = [[PHContentEditingInputRequestOptions alloc] init];
+    options.networkAccessAllowed = NO;
+    return [model.asset requestContentEditingInputWithOptions:options completionHandler:^(PHContentEditingInput * _Nullable contentEditingInput, NSDictionary * _Nonnull info) {
+        BOOL downloadFinined = (![[info objectForKey:PHContentEditingInputCancelledKey] boolValue] && ![info objectForKey:PHContentEditingInputErrorKey]);
+        
+        if (downloadFinined && contentEditingInput.fullSizeImageURL.relativePath) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completion) {
+                    completion(model, contentEditingInput.fullSizeImageURL.relativePath);
+                }
+            });
+        }else {
+            
+            if ([[info objectForKey:PHContentEditingInputResultIsInCloudKey] boolValue] && ![[info objectForKey:PHContentEditingInputCancelledKey] boolValue] && ![info objectForKey:PHContentEditingInputErrorKey]) {
+                PHContentEditingInputRequestOptions *iCloudOptions = [[PHContentEditingInputRequestOptions alloc] init];
+                iCloudOptions.networkAccessAllowed = YES;
+                iCloudOptions.progressHandler = ^(double progress, BOOL * _Nonnull stop) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (progressHandler) {
+                            progressHandler(model,progress);
+                        }
+                    });
+                };
+                
+                PHContentEditingInputRequestID iCloudRequestID = [model.asset requestContentEditingInputWithOptions:iCloudOptions completionHandler:^(PHContentEditingInput * _Nullable contentEditingInput, NSDictionary * _Nonnull info) {
+                    BOOL downloadFinined = (![[info objectForKey:PHContentEditingInputCancelledKey] boolValue] && ![info objectForKey:PHContentEditingInputErrorKey]);
+                    
+                    if (downloadFinined && contentEditingInput.fullSizeImageURL.relativePath) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            if (completion) {
+                                completion(model, contentEditingInput.fullSizeImageURL.relativePath);
+                            }
+                        });
+                    }else {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            if (failed) {
+                                failed(model,info);
+                            }
+                        });
+                    }
+                }];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (startRequestIcloud) {
+                        startRequestIcloud(model,iCloudRequestID);
+                    }
+                });
+            }else {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (failed) {
+                        failed(model,info);
+                    }
+                });
+            }
+        }
+    }];
 }
 
 + (PHImageRequestID)getPhotoForPHAsset:(PHAsset *)asset size:(CGSize)size completion:(void(^)(UIImage *image,NSDictionary *info))completion {
@@ -708,14 +648,14 @@
             } error:&error];
             
             if (error) {
-                if (showLog) NSSLog(@"保存失败");
+                if (HXShowLog) NSSLog(@"保存失败");
                 return;
             }
             
             // 拿到自定义的相册对象
             PHAssetCollection *collection = [self createCollection:albumName];
             if (collection == nil) {
-                if (showLog) NSSLog(@"保存自定义相册失败");
+                if (HXShowLog) NSSLog(@"保存自定义相册失败");
                 return;
             }
             
@@ -724,9 +664,9 @@
             } error:&error];
             
             if (error) {
-                if (showLog) NSSLog(@"保存自定义相册失败");
+                if (HXShowLog) NSSLog(@"保存自定义相册失败");
             } else {
-               if (showLog)  NSSLog(@"保存成功");
+               if (HXShowLog)  NSSLog(@"保存成功");
             }
         });
     }];
@@ -751,14 +691,14 @@
             } error:&error];
             
             if (error) {
-                if (showLog) NSSLog(@"保存失败");
+                if (HXShowLog) NSSLog(@"保存失败");
                 return;
             }
             
             // 拿到自定义的相册对象
             PHAssetCollection *collection = [self createCollection:albumName];
             if (collection == nil) {
-                if (showLog) NSSLog(@"保存自定义相册失败");
+                if (HXShowLog) NSSLog(@"保存自定义相册失败");
                 return;
             }
             
@@ -767,9 +707,9 @@
             } error:&error];
             
             if (error) {
-                if (showLog) NSSLog(@"保存自定义相册失败");
+                if (HXShowLog) NSSLog(@"保存自定义相册失败");
             } else {
-                if (showLog) NSSLog(@"保存成功");
+                if (HXShowLog) NSSLog(@"保存成功");
             }
         });
     }];
@@ -796,7 +736,7 @@
         } error:&error1];
         
         if (error1) {
-            if (showLog) NSSLog(@"创建相册失败...");
+            if (HXShowLog) NSSLog(@"创建相册失败...");
             return nil;
         }
         // 创建相册之后我们还要获取此相册  因为我们要往进存储相片
@@ -820,13 +760,16 @@
     uname(&systemInfo);
     
     NSString *platform = [NSString stringWithCString:systemInfo.machine encoding:NSASCIIStringEncoding];
-    if([platform isEqualToString:@"iPhone7,1"]){
+    if([platform isEqualToString:@"iPhone7,2"]){//6
         return YES;
     }
-    if([platform isEqualToString:@"iPhone7,2"]) {
+    if ([platform isEqualToString:@"iPhone8,1"]) {//6s
         return YES;
     }
-    if ([platform isEqualToString:@"iPhone8,1"]) {
+    if([platform isEqualToString:@"iPhone9,1"] || [platform isEqualToString:@"iPhone9,3"]) {//7
+        return YES;
+    }
+    if([platform isEqualToString:@"iPhone10,1"] || [platform isEqualToString:@"iPhone10,4"]) {//8
         return YES;
     }
     return NO;
@@ -1056,123 +999,7 @@
             }
         }
     }];
-}
-
-+ (PHImageRequestID)getMediumQualityAVAssetWithPHAsset:(PHAsset *)phAsset startRequestIcloud:(void (^)(PHImageRequestID cloudRequestId))startRequestIcloud progressHandler:(void (^)(double progress))progressHandler completion:(void(^)(AVAsset *asset))completion failed:(void(^)(NSDictionary *info))failed{
-    
-    PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
-    options.deliveryMode = PHVideoRequestOptionsDeliveryModeMediumQualityFormat;
-    options.networkAccessAllowed = NO;
-    return [[PHImageManager defaultManager] requestAVAssetForVideo:phAsset options:options resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
-        BOOL downloadFinined = (![[info objectForKey:PHImageCancelledKey] boolValue] && ![info objectForKey:PHImageErrorKey] && ![[info objectForKey:PHImageResultIsDegradedKey] boolValue]);
-        if (downloadFinined && asset) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (completion) {
-                    completion(asset);
-                }
-            });
-        }else {
-            if ([[info objectForKey:PHImageResultIsInCloudKey] boolValue]) {
-                PHImageRequestID cloudRequestId = 0;
-                PHVideoRequestOptions *cloudOptions = [[PHVideoRequestOptions alloc] init];
-                cloudOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeMediumQualityFormat;
-                cloudOptions.networkAccessAllowed = YES;
-                cloudOptions.progressHandler = ^(double progress, NSError * _Nullable error, BOOL * _Nonnull stop, NSDictionary * _Nullable info) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        if (progressHandler) {
-                            progressHandler(progress);
-                        }
-                    });
-                };
-                cloudRequestId = [[PHImageManager defaultManager] requestAVAssetForVideo:phAsset options:cloudOptions resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
-                    BOOL downloadFinined = (![[info objectForKey:PHImageCancelledKey] boolValue] && ![info objectForKey:PHImageErrorKey] && ![[info objectForKey:PHImageResultIsDegradedKey] boolValue]);
-                    if (downloadFinined && asset) {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            if (completion) {
-                                completion(asset);
-                            }
-                        });
-                    }else {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            if (failed) {
-                                failed(info);
-                            }
-                        });
-                    }
-                }];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (startRequestIcloud) {
-                        startRequestIcloud(cloudRequestId);
-                    }
-                });
-            }else {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (failed) {
-                        failed(info);
-                    }
-                });
-            }
-        }
-    }];
-    
-}
-
-+ (PHImageRequestID)getHighQualityAVAssetWithPHAsset:(PHAsset *)phAsset startRequestIcloud:(void (^)(PHImageRequestID cloudRequestId))startRequestIcloud progressHandler:(void (^)(double progress))progressHandler completion:(void(^)(AVAsset *asset))completion failed:(void(^)(NSDictionary *info))failed{
-    PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
-    options.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
-    options.networkAccessAllowed = NO;
-    return [[PHImageManager defaultManager] requestAVAssetForVideo:phAsset options:options resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
-        BOOL downloadFinined = (![[info objectForKey:PHImageCancelledKey] boolValue] && ![info objectForKey:PHImageErrorKey] && ![[info objectForKey:PHImageResultIsDegradedKey] boolValue]);
-        if (downloadFinined && asset) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (completion) {
-                    completion(asset);
-                }
-            });
-        }else {
-            if ([[info objectForKey:PHImageResultIsInCloudKey] boolValue]) {
-                PHImageRequestID cloudRequestId = 0;
-                PHVideoRequestOptions *cloudOptions = [[PHVideoRequestOptions alloc] init];
-                cloudOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
-                cloudOptions.networkAccessAllowed = YES;
-                cloudOptions.progressHandler = ^(double progress, NSError * _Nullable error, BOOL * _Nonnull stop, NSDictionary * _Nullable info) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        if (progressHandler) {
-                            progressHandler(progress);
-                        }
-                    });
-                };
-                cloudRequestId = [[PHImageManager defaultManager] requestAVAssetForVideo:phAsset options:cloudOptions resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
-                    BOOL downloadFinined = (![[info objectForKey:PHImageCancelledKey] boolValue] && ![info objectForKey:PHImageErrorKey] && ![[info objectForKey:PHImageResultIsDegradedKey] boolValue]);
-                    if (downloadFinined && asset) {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            if (completion) {
-                                completion(asset);
-                            }
-                        });
-                    }else {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            if (failed) {
-                                failed(info);
-                            }
-                        });
-                    }
-                }];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (startRequestIcloud) {
-                        startRequestIcloud(cloudRequestId);
-                    }
-                });
-            }else {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (failed) {
-                        failed(info);
-                    }
-                });
-            }
-        }
-    }];
-}
+} 
 
 + (PHImageRequestID)getHighQualityFormatPhoto:(PHAsset *)asset size:(CGSize)size startRequestIcloud:(void (^)(PHImageRequestID cloudRequestId))startRequestIcloud progressHandler:(void (^)(double progress))progressHandler completion:(void(^)(UIImage *image))completion failed:(void(^)(NSDictionary *info))failed {
     PHImageRequestOptions *option = [[PHImageRequestOptions alloc] init];
@@ -1371,7 +1198,7 @@
 }
 + (void)selectListWriteToTempPath:(NSArray *)selectList requestList:(void (^)(NSArray *imageRequestIds, NSArray *videoSessions))requestList completion:(void (^)(NSArray<NSURL *> *allUrl, NSArray<NSURL *> *imageUrls, NSArray<NSURL *> *videoUrls))completion error:(void (^)(void))error {
     if (selectList.count == 0) {
-        if (showLog) NSSLog(@"请选择后再写入");
+        if (HXShowLog) NSSLog(@"请选择后再写入");
         if (error) {
             error();
         }
@@ -1448,7 +1275,7 @@
                     i++;
                     k++;
                     if (k == imageCount && !writeError) {
-                        if (showLog) NSSLog(@"图片写入成功");
+                        if (HXShowLog) NSSLog(@"图片写入成功");
                     }
                     if (i == count && !writeError) {
                         dispatch_async(dispatch_get_main_queue(), ^{
@@ -1488,7 +1315,7 @@
                             i++;
                             j++;
                             if (j == videoCount && !writeError) {
-                                if (showLog) NSSLog(@"视频写入成功");
+                                if (HXShowLog) NSSLog(@"视频写入成功");
                             }
                             if (i == count && !writeError) {
                                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -1545,7 +1372,7 @@
                         i++;
                         j++;
                         if (j == videoCount && !writeError) {
-                            if (showLog) NSSLog(@"视频写入成功");
+                            if (HXShowLog) NSSLog(@"视频写入成功");
                         }
                         if (i == count && !writeError) {
                             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1586,12 +1413,12 @@
         if (model.type == HXPhotoModelMediaTypePhotoGif) {
             // 根据asset获取imageData
             PHImageRequestID request_Id = [self getImageData:model.asset startRequestIcloud:^(PHImageRequestID cloudRequestId) {
-                if (showLog) NSSLog(@"正在请求下载iCloud");
+                if (HXShowLog) NSSLog(@"正在请求下载iCloud");
                 if (iCloudRequestId) {
                     iCloudRequestId(cloudRequestId);
                 }
             } progressHandler:^(double progress) {
-                if (showLog) NSSLog(@"iCloud下载进度 %f ",progress);
+                if (HXShowLog) NSSLog(@"iCloud下载进度 %f ",progress);
             } completion:^(NSData *imageData, UIImageOrientation orientation) {
                 // 将imageData 写入临时目录
                 if ([imageData writeToFile:model.fullPathToFile atomically:YES]) {
@@ -1624,12 +1451,12 @@
                 size = CGSizeMake(model.endImageSize.width * 1.5, model.endImageSize.height * 1.5);
             }
             PHImageRequestID request_Id = [self getHighQualityFormatPhoto:model.asset size:size startRequestIcloud:^(PHImageRequestID cloudRequestId) {
-                if (showLog) NSSLog(@"正在请求下载iCloud");
+                if (HXShowLog) NSSLog(@"正在请求下载iCloud");
                 if (iCloudRequestId) {
                     iCloudRequestId(cloudRequestId);
                 }
             } progressHandler:^(double progress) {
-                if (showLog) NSSLog(@"iCloud下载进度 %f ",progress);
+                if (HXShowLog) NSSLog(@"iCloud下载进度 %f ",progress);
             } completion:^(UIImage *image) {
                 NSData *imageData;
                 if (image.imageOrientation != UIImageOrientationUp) {

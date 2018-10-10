@@ -28,7 +28,7 @@
 
 - (NSDate *)creationDate {
     if (self.type == HXPhotoModelMediaTypeCameraPhoto || self.type == HXPhotoModelMediaTypeCameraVideo) {
-        return [NSDate date];
+        return _creationDate ?: [NSDate date];
     }
     if (!_creationDate) {
         _creationDate = [self.asset valueForKey:@"creationDate"];
@@ -50,14 +50,18 @@
 
 - (NSData *)locationData {
     if (!_locationData) {
-        _locationData = [self.asset valueForKey:@"locationData"];
+        if (self.asset) {
+            _locationData = [self.asset valueForKey:@"locationData"];
+        }
     }
     return _locationData;
 }
 
 - (CLLocation *)location {
     if (!_location) {
-        _location = [self.asset valueForKey:@"location"];
+        if (self.asset) {
+            _location = [self.asset valueForKey:@"location"];
+        }
     }
     return _location;
 }
@@ -93,7 +97,7 @@
     if (self = [super init]) {
         self.type = HXPhotoModelMediaTypeCameraPhoto;
         self.subType = HXPhotoModelMediaSubTypePhoto;
-        self.thumbPhoto = [HXPhotoTools hx_imageNamed:@"qz_photolist_picture_fail@2x.png"];
+        self.thumbPhoto = [HXPhotoTools hx_imageNamed:@"hx_qz_photolist_picture_fail@2x.png"];
         self.previewPhoto = self.thumbPhoto;
         self.imageSize = self.thumbPhoto.size;
         self.networkPhotoUrl = imageURL;
@@ -227,7 +231,7 @@
 {
     if (_endImageSize.width == 0 || _endImageSize.height == 0) {
         CGFloat width = [UIScreen mainScreen].bounds.size.width;
-        CGFloat height = [UIScreen mainScreen].bounds.size.height - kNavigationBarHeight;
+        CGFloat height = [UIScreen mainScreen].bounds.size.height - hxNavigationBarHeight;
         CGFloat imgWidth = self.imageSize.width;
         CGFloat imgHeight = self.imageSize.height;
         CGFloat w;
@@ -270,11 +274,11 @@
 - (CGSize)endDateImageSize {
     if (_endDateImageSize.width == 0 || _endDateImageSize.height == 0) {
         CGFloat width = [UIScreen mainScreen].bounds.size.width;
-        CGFloat height = [UIScreen mainScreen].bounds.size.height - kTopMargin - kBottomMargin;
+        CGFloat height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - hxBottomMargin;
         UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
         if (orientation == UIInterfaceOrientationLandscapeRight || orientation == UIInterfaceOrientationLandscapeLeft){
-            if (kDevice_Is_iPhoneX) {
-                height = [UIScreen mainScreen].bounds.size.height - kTopMargin - 21;
+            if (HX_IS_IPhoneX_All) {
+                height = [UIScreen mainScreen].bounds.size.height - hxTopMargin - 21;
             }
         }
         CGFloat imgWidth = self.imageSize.width;

@@ -123,6 +123,7 @@ typedef NS_ENUM(NSUInteger, HXPhotoManagerVideoSelectedType) {
  */
 - (void)getAllPhotoAlbums:(void(^)(HXAlbumModel *firstAlbumModel))firstModel albums:(void(^)(NSArray *albums))albums isFirst:(BOOL)isFirst;
 
+- (void)fetchAlbums:(void (^)(HXAlbumModel *selectedModel))selectedModel albums:(void(^)(NSArray *albums))albums;
 /**
  根据某个相册模型获取照片列表
 
@@ -307,4 +308,32 @@ typedef NS_ENUM(NSUInteger, HXPhotoManagerVideoSelectedType) {
 - (NSArray *)afterICloudUploadArray;
 
 - (NSString *)version;
+
+/**
+ 保存模型数组到本地
+ 
+ @param success 成功
+ @param failed 失败
+ */
+- (void)saveSelectModelArraySuccess:(void (^)(void))success failed:(void (^)(void))failed;
+
+/**
+ 删除本地保存的模型数组
+ 
+ @return success or failed
+ */
+- (BOOL)deleteLocalSelectModelArray;
+
+/**
+ 获取保存在本地的模型数组
+ 
+ */
+- (void)getSelectedModelArrayComplete:(void (^)(NSArray<HXPhotoModel *> *modelArray))complete;
+
+- (BOOL)saveSelectModelArray;
+
+- (NSArray<HXPhotoModel *> *)getSelectedModelArray;
+
+- (BOOL)deleteSelectModelArray;
+
 @end
